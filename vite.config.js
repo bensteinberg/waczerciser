@@ -1,41 +1,47 @@
 import { defineConfig } from 'vite'
 import { resolve } from 'path'
 import { copyFileSync, mkdirSync } from 'fs'
+import path from 'path'
 
 export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        sw: 'src/lib/sw.ts'
+        sw: 'src/lib/sw.ts',
+        ui: 'src/lib/ui.ts',
       },
       output: {
-        dir: 'static/embed/replay_web_page',
+        dir: 'static/embed/replay-web-page',
         entryFileNames: '[name].js'
       }
-    }
+    },
+  },
+  watch: {
+    include: [
+      'src/player/**',
+    ]
   },
   plugins: [{
     name: 'copy-html',
     closeBundle() {
-      // Ensure directories exist
-      mkdirSync('static/host', { recursive: true });
+      const outDir = resolve(__dirname, 'static');
       
-      copyFileSync(
-        resolve(__dirname, 'src/assets/index.html'),
-        resolve(__dirname, 'static/host/index.html')
-      );
-      copyFileSync(
-        resolve(__dirname, 'contrib/wacz-exhibitor/html/embed/index.js'),
-        resolve(__dirname, 'static/embed/index.js')
-      );
-      copyFileSync(
-        resolve(__dirname, 'contrib/wacz-exhibitor/html/embed/index.html'),
-        resolve(__dirname, 'static/embed/index.html')
-      );
-      copyFileSync(
-        resolve(__dirname, 'contrib/wacz-exhibitor/html/replay-web-page/ui.js'),
-        resolve(__dirname, 'static/embed/replay_web_page/ui.js')
-      );
+      for (const file of ['host/index.html', 'embed/index.js', 'embed/index.html']) {
+        mkdirSync(resolve(outDir, path.dirname(file)), { recursive: true });
+        copyFileSync(
+          resolve(__dirname, `src/player/${file}`),
+          resolve(outDir, file)
+        );
+      }
+      // copyFileSync(
+      //   resolve(__dirname, 'node_modules/replaywebpage/ui.js'),
+      //   resolve(outDir, 'embed/replay-web-page/ui.js')
+      // );
+    },
+    buildStart() {
+      for (const file of ['host/index.html', 'embed/index.js', 'embed/index.html']) {
+        this.addWatchFile(resolve(__dirname, `src/player/${file}`))
+      }
     }
   }]
 })

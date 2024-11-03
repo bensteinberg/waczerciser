@@ -2,20 +2,22 @@ import { glob } from 'fs/promises';
 import path from 'path';
 import { WARCRecord, LimitReader } from 'warcio';
 import fs from 'fs';
-import { uriToFilePath } from './utils.js';
+import { pathExists, uriToFilePath } from './utils.js';
+import type { FSWatcher } from 'chokidar';
 
 
 /**
  * Create a WACZ or WARC file from a directory
  * @param inputDir - Directory containing the WACZ or WARC contents
  * @param archiveFile - Path where the WACZ or WARC file should be created
+ * @param asFiles - Whether to include files in the WARC
  * @throws Error if creation fails
  */
-export async function createArchive(inputDir: string, archiveFile: string): Promise<void> {
+export async function createArchive(inputDir: string, archiveFile: string, asFiles: boolean = false): Promise<void> {
     if (archiveFile.toLowerCase().endsWith('.wacz')) {
-        return createWACZ(inputDir, archiveFile);
+        return createWACZ(inputDir, archiveFile, asFiles);
     } else if (archiveFile.toLowerCase().endsWith('.warc') || archiveFile.toLowerCase().endsWith('.warc.gz')) {
-        return createWARC(inputDir, archiveFile);
+        return createWARC(inputDir, archiveFile, asFiles);
     } else {
         throw new Error('Invalid archive file extension');
     }
@@ -25,41 +27,80 @@ export async function createArchive(inputDir: string, archiveFile: string): Prom
  * Create a WACZ file from a directory
  * @param inputDir - Directory containing the WACZ contents
  * @param waczFile - Path where the WACZ file should be created
+ * @param asFiles - Whether to include files in the WARC
  * @throws Error if creation fails
  */
-export async function createWACZ(inputDir: string, waczFile: string): Promise<void> {
+export async function createWACZ(inputDir: string, waczFile: string, asFiles: boolean = false): Promise<void> {
     // Import required modules
     const { WACZ } = await import('@harvard-lil/js-wacz');
+    const os = await import('os');
     
-    // Create new WACZ instance with configuration
-    const archive = new WACZ({
-        // Point to WARC files in the archive directory
-        input: `${inputDir}/archive/*.warc*`,
-        // Set output path
-        output: waczFile,
-        // Use existing pages files if present
-        pagesDir: `${inputDir}/pages`,
-        // Use existing CDXJ files if present 
-        cdxjDir: `${inputDir}/indexes`,
-        // Include logs if present
-        logDir: `${inputDir}/logs`
-    });
+    // Create temporary directory
+    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'wacz-'));
+    
+    try {
+        const archiveDir = `${inputDir}/archive`;
+        const createdWarcs: string[] = [];
 
-    // Process and create the WACZ file
-    await archive.process();
+        // Create a WARC file for each directory
+        for await (const dir of glob(`${archiveDir}/*`, { withFileTypes: true })) {
+            if (!dir.isDirectory()) continue;
+            const warcFile = path.join(tempDir, `${dir.name}.warc.gz`);
+            await createWARC(path.join(archiveDir, dir.name), warcFile, asFiles);
+            createdWarcs.push(warcFile);
+        }
+
+        // add any .warc/.warc.gz files in the input directory that aren't already in the temp directory
+        for await (const warcFile of glob(`${archiveDir}/*.warc.gz`)) {
+            const outputFile = path.join(tempDir, path.basename(warcFile));
+            if (!createdWarcs.includes(outputFile)) {
+                // copy the file to the temp directory
+                await fs.promises.copyFile(warcFile, outputFile);
+                createdWarcs.push(outputFile);
+            }
+        }
+
+        // if there are no warcs, throw an error
+        if (createdWarcs.length === 0) {
+            throw new Error(`No WARC files or directories found in ${archiveDir}`);
+        }
+
+        // Create new WACZ instance with configuration
+        const config: any = {
+            input: `${tempDir}/*.warc.gz`,
+            output: waczFile,
+        };
+
+        // include optional directories if they exist
+        if (await pathExists(`${inputDir}/pages`)) {
+            config.pagesDir = `${inputDir}/pages`;
+        }
+        if (await pathExists(`${inputDir}/logs`)) {
+            config.logDir = `${inputDir}/logs`;
+        }
+
+        // Process and create the WACZ file
+        await new WACZ(config).process();
+    } finally {
+        // Clean up temporary directory and its contents
+        try {
+            await fs.promises.rm(tempDir, { recursive: true });
+        } catch (e) {
+            console.warn(`Failed to delete temporary directory ${tempDir}:`, e);
+        }
+    }
 }
 
 /**
  * Create a WARC file from a directory of extracted contents
  * @param inputDir - Directory containing the extracted WARC contents
  * @param outputFile - Path where the WARC file should be created
+ * @param asFiles - Whether to include files in the WARC
  * @throws Error if creation fails
  */
-export async function createWARC(inputDir: string, outputFile: string): Promise<void> {
+export async function createWARC(inputDir: string, outputFile: string, asFiles: boolean): Promise<void> {
+    console.log("creating warc", inputDir, outputFile);
     const { WARCSerializer } = await import('warcio');
-
-    const useGzip = outputFile.endsWith('.gz');
-    const warcStream = fs.createWriteStream(outputFile);
 
     // get map of all files
     const files = await glob(`${inputDir}/**/*`);
@@ -70,6 +111,14 @@ export async function createWARC(inputDir: string, outputFile: string): Promise<
         if (!stats.isFile()) continue;
         
         const relativePath = path.relative(inputDir, filePath);
+
+        // if we have a domain, include all files
+        if (asFiles) {
+            pathMap[relativePath] = stats;
+            continue;
+        }
+
+        // otherwise, we're processing an exported warc, so directory should only include warcs and http/file urls
         if (relativePath.endsWith('.warc') && !relativePath.includes('/')) {
             if (warcPath) {
                 throw new Error('Multiple WARC files found in input directory');
@@ -81,6 +130,9 @@ export async function createWARC(inputDir: string, outputFile: string): Promise<
             throw new Error(`Unexpected file in input directory: ${relativePath}`);
         }
     }
+
+    const useGzip = outputFile.endsWith('.gz');
+    const warcStream = fs.createWriteStream(outputFile);
 
     // if warc exists, start by exporting it, injecting data from files
     if (warcPath) {
@@ -121,25 +173,32 @@ export async function createWARC(inputDir: string, outputFile: string): Promise<
 
         // calculate a URL from the relative path
         const parts = relativePath.split(path.sep);
-        const protocol = parts[0];
-        if (protocol.endsWith('.warc')) {
-            continue;
-        }
 
-        // http protocol
-        if (['https:', 'http:'].includes(protocol)) {
-            parts[0] += '/';
-            
-            // Remove trailing parenthesis if present
-            parts[1] = parts[1].replace(/\)$/, '');
-            
-            // Reverse SURT domain components (e.g., "com,example" -> "example.com")
-            parts[1] = parts[1].split(',').reverse().join('.');
-        }
+        let protocol;
+        if (asFiles) {
+            protocol = 'file:';
+            parts.unshift('file://');
+        } else {
+            protocol = parts[0];
+            if (protocol.endsWith('.warc')) {
+                continue;
+            }
 
-        // file protocol
-        else if (protocol === 'file:') {
-            parts[0] += '//';
+            // http protocol
+            if (['https:', 'http:'].includes(protocol)) {
+                parts[0] += '/';
+                
+                // Remove trailing parenthesis if present
+                parts[1] = parts[1].replace(/\)$/, '');
+                
+                // Reverse SURT domain components (e.g., "com,example" -> "example.com")
+                parts[1] = parts[1].split(',').reverse().join('.');
+            }
+
+            // file protocol
+            else if (protocol === 'file:') {
+                parts[0] += '//';
+            }
         }
 
         // strip last part if it's an index file
@@ -167,4 +226,32 @@ export async function createWARC(inputDir: string, outputFile: string): Promise<
     }
 
     await warcStream.end();
+}
+
+/**
+ * Watch a directory and rebuild the archive when changes are detected
+ * @param inputDir - Directory to watch for changes
+ * @param archiveFile - Path where the archive file should be created
+ * @returns Chokidar watcher instance
+ */
+export async function watchAndCreate(inputDir: string, archiveFile: string, asFiles: boolean = false): Promise<FSWatcher> {
+    const chokidar = await import('chokidar');  
+    
+    // Build initial archive
+    await createArchive(inputDir, archiveFile, asFiles);
+
+    // Set up file watcher
+    const watcher = chokidar.watch(inputDir, {
+        ignored: /(^|[\/\\])\../, // ignore dotfiles. TODO: should we?
+        persistent: true,
+    });
+
+    // Watch for changes and rebuild the archive
+    watcher.on('change', async (path) => {
+        console.log(`Changes detected in ${path}, rebuilding archive...`);
+        await createArchive(inputDir, archiveFile, asFiles);
+        console.log('Archive rebuilt successfully');
+    });
+
+    return watcher;
 }

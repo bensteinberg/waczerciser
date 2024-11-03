@@ -17,16 +17,10 @@
         "*/.keep"
     ],
     "scripts": {
-        "js-wacz": "node cli.js",
-        "lint": "standard",
-        "lint-autofix": "standard --fix",
-        "test": "node --test",
-        "dev-signer": "echo 'TEST_SIGNING_URL=http://127.0.0.1:5000/sign' > .env ; cd .services/signer ; bash ./run.sh",
-        "publish-util": "cd .services/publish ; bash ./run.sh",
-        "build": "tsc && npm run build-sw",
-        "build-sw": "tsc src/lib/sw.ts --outDir dist/serve --module ES2022 --target ES2022 --moduleResolution bundler --allowJs --skipLibCheck",
-        "start": "node dist/bin/cli.js",
-        "dev": "tsx src/bin/cli.ts"
+        "waczerciser": "node dist/bin/cli.js",
+        "build": "tsc",
+        "dev": "tsx src/bin/cli.ts",
+        "test": "tsx --test test/**/*.test.js"
     },
     "repository": {
         "type": "git",
@@ -40,22 +34,18 @@
     "homepage": "https://github.com/harvard-lil/js-wacz#readme",
     "dependencies": {
         "@harvard-lil/js-wacz": "^0.1.4",
-        "@webrecorder/wabac": "^2.20.1",
         "chalk": "^5.2.0",
         "chokidar": "^4.0.1",
         "commander": "^12.0.0",
         "finalhandler": "^1.3.1",
-        "serve-static": "^1.16.2",
+        "send": "^1.1.0",
         "typescript": "^5.6.3",
         "vite": "^5.4.10",
         "yauzl-promise": "^4.0.0"
     },
     "devDependencies": {
         "@types/finalhandler": "^1.2.3",
-        "@types/serve-static": "^1.15.7",
         "@types/yauzl-promise": "^4.0.1",
-        "dotenv": "^16.0.3",
-        "standard": "^17.0.0",
         "tsx": "^4.19.2"
     }
 }

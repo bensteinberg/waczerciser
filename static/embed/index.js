@@ -24,10 +24,11 @@ if (params.get("source") === null) {
 //------------------------------------------------------------------------------
 // Prepare and inject `<replay-web-page>`
 //------------------------------------------------------------------------------
-player.setAttribute("source", `/${params.get("source")}`);
+player.setAttribute("source", params.get("source"));
 player.setAttribute("replayBase", "/replay-web-page/");
 player.setAttribute("embed", "default");
 player.setAttribute("requireSubDomainIframe", "");
+player.setAttribute("noCache", "");
 
 // Param: `url` (see: https://replayweb.page/docs/embedding)
 if (params.get("url")) {
@@ -65,8 +66,24 @@ window.addEventListener("message", (event) => {
   //
   // Forward messages coming from the service worker
   //
+  console.log("received message", event.data?.type, event);
   try {
     if (event.source.location.pathname === player.getAttribute("replayBase")) {
+      // Handle 404 errors from service worker
+      if (event.data.type === '404_ERROR') {
+        console.log('Resource not found:', event.data.url);
+        
+        // Send response back through the message port
+        event.ports[0].postMessage(new Response(
+          '<p style="margin: auto">default content...</p>',
+          {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' }
+        }));
+        return;
+      }
+
+      // Forward other messages to parent as before
       parent.window.postMessage(
         { waczExhibitorHref: window.location.href, ...event.data },
         "*"
