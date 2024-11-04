@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hasFiles, uriToFilePath, safeJoin } from '../src/lib/utils.ts';
+import { hasFiles, uriToFilePath, safeJoin } from '../../src/lib/utils.ts';
 import fs from 'fs';
 import path from 'path';
-import { withTempDir } from './helpers.ts';
+import { withTempDir } from '../helpers.ts';
 
 test('utils.hasFiles', async (t) => {
   await t.test('returns true for directory with files', withTempDir(async (tempDir) => {

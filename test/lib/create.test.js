@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createArchive } from '../src/lib/create.ts';
-import { extractArchive } from '../src/lib/extract.ts';
+import { createArchive } from '../../src/lib/create.ts';
+import { extractArchive } from '../../src/lib/extract.ts';
 import path from 'path';
-import { withTempDir, FIXTURES_DIR, globDir } from './helpers.ts';
+import { withTempDir, FIXTURES_DIR, globDir } from '../helpers.ts';
 import fs from 'fs';
 import { WARCParser } from 'warcio';
 

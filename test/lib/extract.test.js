@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractArchive } from '../src/lib/extract.ts';
+import { extractArchive } from '../../src/lib/extract.ts';
 import path from 'path';
-import { withTempDir, FIXTURES_DIR, globDir } from './helpers.ts';
+import { withTempDir, FIXTURES_DIR, globDir } from '../helpers.ts';
 
 
 test('extract.extractArchive', async (t) => {

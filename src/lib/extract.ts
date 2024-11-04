@@ -1,6 +1,6 @@
 import { glob } from 'fs/promises';
 import path from 'path';
-import { WARCRecord, WARCSerializer, LimitReader } from 'warcio';
+import { WARCRecord, WARCSerializer, LimitReader, AsyncIterReader } from 'warcio';
 import fs from 'fs';
 import { uriToFilePath, safeJoin } from './utils.js';
 
@@ -98,8 +98,9 @@ export async function extractWARC(warcFile: string, outputDir: string): Promise<
             await fs.promises.writeFile(outputPath, await record.contentText());
 
             // output the file name as fake file contents to the warc
-            const fakeReader = Readable.from(Buffer.from(outputPath));
-            record._reader = new LimitReader(fakeReader, fakeReader.length);
+            const buffer = Buffer.from(outputPath);
+            const fakeReader = new AsyncIterReader(Readable.from(buffer));
+            record._reader = new LimitReader(fakeReader, buffer.length);
             record._contentReader = null;
         }
 
