@@ -12,18 +12,12 @@ export async function createCommand(inputDir: string, outputFile: string, option
     if (options.watch) {
         console.log(chalk.blue(`Building initial archive from ${inputDir}...`));
         const watcher = await watchAndCreate(inputDir, outputFile, options.asFiles);
-        
-        // Handle graceful shutdown
-        setupWatcherCleanup(watcher);
+        process.on('SIGINT', async () => {
+            await watcher.close();
+            exit('\nWatcher stopped');
+        });
     } else {
         await createArchive(inputDir, outputFile, options.asFiles);
         return exit(`Successfully created ${outputFile} from ${inputDir}`);
     }
 }
-
-function setupWatcherCleanup(watcher: FSWatcher) {
-    process.on('SIGINT', async () => {
-        await watcher.close();
-        exit('\nWatcher stopped');
-    });
-} 
