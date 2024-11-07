@@ -1,9 +1,10 @@
 import { glob } from "fs/promises";
 import path from "path";
-import { WARCRecord, LimitReader } from "warcio";
+import { WARCRecord, LimitReader, AsyncIterReader } from "warcio";
 import fs from "fs";
 import { pathExists, uriToFilePath } from "./utils.js";
 import type { FSWatcher } from "chokidar";
+import mime from "mime-types";
 
 /**
  * Create a WACZ or WARC file from a directory
@@ -126,7 +127,7 @@ export async function createWARC(
 
 		const relativePath = path.relative(inputDir, filePath);
 
-		// if we have a domain, include all files
+		// if we are exporting a directory as files, include all files
 		if (asFiles) {
 			pathMap[relativePath] = stats;
 			continue;
@@ -160,29 +161,33 @@ export async function createWARC(
 
 		for await (const record of parser) {
 			if (record.warcType === "response" && record.warcTargetURI) {
-				const filename = uriToFilePath(record.warcTargetURI);
+				const filename = uriToFilePath(record);
 				// If we have a matching file, inject its contents
 				if (filename in pathMap) {
-					const filePath = path.join(inputDir, filename);
+                    const filePath = path.join(inputDir, filename);
 					let fileContent = await fs.promises.readFile(filePath);
-
+                    
 					// handle http headers
-					if (
-						record.httpHeaders?.headers
-							.get("Content-Encoding")
-							?.toLowerCase() === "gzip"
-					) {
-						console.log("HAS GZIP");
-						const zlib = await import("zlib");
-						fileContent = await zlib.gzipSync(fileContent);
+                    const headers = record.httpHeaders?.headers;
+                    if (headers) {
+                        if (
+                            headers
+                                .get("Content-Encoding")
+                                ?.toLowerCase() === "gzip"
+                        ) {
+                            const zlib = await import("zlib");
+                            fileContent = await zlib.gzipSync(fileContent);
+                        }
+                        headers.set(
+							"Content-Length",
+							fileContent.length.toString(),
+						);
 					}
-					record.httpHeaders.headers.set(
-						"Content-Length",
-						fileContent.length.toString(),
-					);
 
+					const buffer = Buffer.from(fileContent);
+					const fakeReader = new AsyncIterReader(Readable.from(buffer));
 					record._reader = new LimitReader(
-						Readable.from(fileContent),
+						fakeReader,
 						fileContent.length,
 					);
 					delete pathMap[filename];
@@ -208,23 +213,18 @@ export async function createWARC(
 			parts.unshift("file://");
 		} else {
 			protocol = parts[0];
+
+            // skip warc file created during extraction
 			if (protocol.endsWith(".warc")) {
 				continue;
 			}
 
-			// http protocol
+			// add slashes to http and file protocols
 			if (["https:", "http:"].includes(protocol)) {
+                // http protocol
 				parts[0] += "/";
-
-				// Remove trailing parenthesis if present
-				parts[1] = parts[1].replace(/\)$/, "");
-
-				// Reverse SURT domain components (e.g., "com,example" -> "example.com")
-				parts[1] = parts[1].split(",").reverse().join(".");
-			}
-
-			// file protocol
-			else if (protocol === "file:") {
+			} else {  
+                // file protocol
 				parts[0] += "//";
 			}
 		}
@@ -238,7 +238,8 @@ export async function createWARC(
 
 		// Create a response record with streaming content
 		const fileStream = fs.createReadStream(filePath);
-		const httpHeaders = { "Content-Type": "text/html" }; // TODO: detect proper content type
+		const contentType = mime.lookup(filePath) || 'text/html';
+		const httpHeaders: Record<string, string> = { "Content-Type": contentType };
 		if (protocol.startsWith("http")) {
 			httpHeaders["Content-Length"] = stats.size.toString();
 		}

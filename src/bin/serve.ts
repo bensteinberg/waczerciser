@@ -61,7 +61,7 @@ async function setupArchiveFile(archiveFile: string, options: ServeOptions) {
 	return { replayFile, watcher, tempPrefix };
 }
 
-function determineArchiveFormat(archiveFile: string, format?: string) {
+function determineArchiveFormat(archiveDir: string, format?: string) {
 	let suffix = ".warc.gz";
 	let asFiles = false;
 
@@ -72,12 +72,12 @@ function determineArchiveFormat(archiveFile: string, format?: string) {
 			asFiles = true;
 		}
 	} else {
-		if (fs.existsSync(path.join(archiveFile, "datapackage.json"))) {
+		if (fs.existsSync(path.join(archiveDir, "datapackage.json"))) {
 			suffix = ".wacz";
 		} else if (
-			!fs.existsSync(path.join(archiveFile, "http:")) &&
-			!fs.existsSync(path.join(archiveFile, "https:")) &&
-			!fs.existsSync(path.join(archiveFile, "file:"))
+			!fs.existsSync(path.join(archiveDir, "http:")) &&
+			!fs.existsSync(path.join(archiveDir, "https:")) &&
+			!fs.existsSync(path.join(archiveDir, "file:"))
 		) {
 			asFiles = true;
 		}

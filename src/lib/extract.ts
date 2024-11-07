@@ -1,7 +1,6 @@
 import { glob } from "fs/promises";
 import path from "path";
 import {
-	WARCRecord,
 	WARCSerializer,
 	LimitReader,
 	AsyncIterReader,
@@ -114,7 +113,7 @@ export async function extractWARC(
 		// dump responses as files
 		if (record.warcType === "response" && record.warcTargetURI) {
 			// Write the response content to its individual file
-			const filename = uriToFilePath(record.warcTargetURI);
+			const filename = uriToFilePath(record);
 			const outputPath = safeJoin(outputDir, filename);
 			await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
 			await fs.promises.writeFile(outputPath, await record.contentText());

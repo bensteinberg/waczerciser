@@ -1,6 +1,7 @@
 import fs from "fs";
-import { getSurt } from "warcio/utils";
 import path from "path";
+import mime from "mime-types";
+import type { WARCRecord } from "warcio";
 
 /**
  * Determine whether the given `path` points to a directory with files.
@@ -31,11 +32,13 @@ export async function pathExists(path: string) {
  * @param uri - URI to convert
  * @returns File path
  */
-export function uriToFilePath(uri: string) {
-	let filename = getSurt(uri);
+export function uriToFilePath(record: WARCRecord) {
+    const uri = record.warcTargetURI;
+    if (!uri) {
+		throw new Error("URI is required");
+	}
 
-	// remove extra slashes
-	filename = filename.replace(/\/+/g, "/");
+	let filename = uri.replace(/\/+/g, "/");
 
 	// make sure surt starts with the protocol (will be missing for http)
 	const protocol = new URL(uri).protocol;
@@ -43,9 +46,11 @@ export function uriToFilePath(uri: string) {
 		filename = `${protocol}/${filename}`;
 	}
 
-	// TODO: this should check the content type and use the appropriate extension
+	// if no extension, use `__index__` as filename and content type to determine the extension
 	if (filename.endsWith("/")) {
-		filename += "__index__.html";
+        const contentType = record.httpHeaders?.headers.get("Content-Type") || "text/html";
+        const extension = mime.extension(contentType);
+		filename += `__index__.${extension}`;
 	}
 	return filename;
 }
