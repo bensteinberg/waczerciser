@@ -1,12 +1,16 @@
-import http from 'http';
-import path from 'path';
-import finalhandler from 'finalhandler';
-import send from 'send';
+import http from "http";
+import path from "path";
+import finalhandler from "finalhandler";
+import send from "send";
 
-export async function startServer(warcPath: string, url: string = '', port = 8080) {
-    const warcUrl = `/${path.basename(warcPath)}`;
-    
-    const indexHtml = `<!doctype html>
+export async function startServer(
+	warcPath: string,
+	url: string = "",
+	port = 8080,
+) {
+	const warcUrl = `/${path.basename(warcPath)}`;
+
+	const indexHtml = `<!doctype html>
     <html lang="en">
       <head>
         <title>wacz-exhibitor sandbox</title>
@@ -53,36 +57,38 @@ export async function startServer(warcPath: string, url: string = '', port = 808
       </body>
     </html>`;
 
-    const server = http.createServer((req, res) => {
-        // Serve static string at root path
-        if (req.url === '/') {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            res.end(indexHtml);
-            return;
-        }
+	const server = http.createServer((req, res) => {
+		// Serve static string at root path
+		if (req.url === "/") {
+			res.writeHead(200, { "Content-Type": "text/html" });
+			res.end(indexHtml);
+			return;
+		}
 
-        // Serve service worker script at /replay/sw.js (with any query params)
-        if (req.url?.startsWith('/replay/sw.js')) {
-            res.writeHead(200, { 'Content-Type': 'application/javascript' });
-            res.end('importScripts("https://cdn.jsdelivr.net/npm/replaywebpage@2.2.1/sw.js");');
-            return;
-        }
+		// Serve service worker script at /replay/sw.js (with any query params)
+		if (req.url?.startsWith("/replay/sw.js")) {
+			res.writeHead(200, { "Content-Type": "application/javascript" });
+			res.end(
+				'importScripts("https://cdn.jsdelivr.net/npm/replaywebpage@2.2.1/sw.js");',
+			);
+			return;
+		}
 
-        // Serve WARC file at /basename
-        if (req.url === warcUrl) {
-            send(req, warcPath)
-                .on('error', (err) => {
-                    res.statusCode = err.status || 500;
-                    finalhandler(req, res)(err);
-                })
-                .pipe(res);
-            return;
-        }
+		// Serve WARC file at /basename
+		if (req.url === warcUrl) {
+			send(req, warcPath)
+				.on("error", (err) => {
+					res.statusCode = err.status || 500;
+					finalhandler(req, res)(err);
+				})
+				.pipe(res);
+			return;
+		}
 
-        // Handle 404 for other routes
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('Not Found');
-    });
+		// Handle 404 for other routes
+		res.writeHead(404, { "Content-Type": "text/plain" });
+		res.end("Not Found");
+	});
 
-    return server.listen(port);
+	return server.listen(port);
 }

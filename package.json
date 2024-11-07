@@ -48,8 +48,10 @@
         "yauzl-promise": "^4.0.0"
     },
     "devDependencies": {
+        "@biomejs/biome": "1.9.4",
         "@types/finalhandler": "^1.2.3",
         "@types/yauzl-promise": "^4.0.1",
+        "ts-standard": "^12.0.2",
         "tsx": "^4.19.2"
     }
 }
