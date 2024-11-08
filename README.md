@@ -1,3 +1,7 @@
+<p align="center">
+    <img width="384" alt="logo" src="https://github.com/user-attachments/assets/20c67078-972e-4e8a-a268-6630eca14bea" style="margin: auto">
+</p>
+
 # Waczerciser
 
 Waczerciser is an experimental tool for opening, inspecting, editing, and re-packaging WARC and WACZ files.
@@ -15,6 +19,10 @@ Or run it without installing using npx:
 ```bash
 npx github:harvard-lil/waczerciser
 ```
+
+## Screencast
+
+https://github.com/user-attachments/assets/6cf6e8c6-bbd2-4240-a994-3a551bea3de5
 
 ## Commands
 
