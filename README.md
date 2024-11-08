@@ -16,6 +16,14 @@ Or run it without installing using npx:
 npx github:harvard-lil/waczerciser
 ```
 
+## Motivation
+
+Waczerciser is primarily useful for debugging web archive files and understanding how they work.
+
+Beyond this, the WACZ format has potential as an _application container format_, not just an archival format,
+for distributing sandboxed web applications as single files. Waczerciser makes it much easier to write
+web apps as WACZ files and explore this potential use case.
+
 ## Commands
 
 ### `waczerciser extract`
