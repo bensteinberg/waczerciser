@@ -117,7 +117,6 @@ export async function extractWARC(
 			const outputPath = safeJoin(outputDir, filename);
 			await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
 			await fs.promises.writeFile(outputPath, await record.contentText());
-      console.log(filename, outputPath);
 			// output the file name as fake file contents to the warc
 			const buffer = Buffer.from(outputPath);
 			const fakeReader = new AsyncIterReader(Readable.from(buffer));

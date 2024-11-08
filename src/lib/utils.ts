@@ -38,13 +38,8 @@ export function uriToFilePath(record: WARCRecord) {
 		throw new Error("WARC-Target-URI header is required");
 	}
 
-	// make sure surt starts with the protocol (will be missing for http)
-	// const protocol = new URL(uri).protocol;
-	// if (!filename.startsWith(protocol)) {
-	// 	filename = `${protocol}/${filename}`;
-	// }
+    // replace multiple slashes with a single slash
 	uri = uri.replace(/\/+/g, "/");
-
 
 	// if no extension, use `__index__` as filename and content type to determine the extension
 	if (uri.endsWith("/")) {
@@ -52,6 +47,7 @@ export function uriToFilePath(record: WARCRecord) {
         const extension = mime.extension(contentType);
 		uri += `__index__.${extension}`;
 	}
+    
 	return uri;
 }
 
