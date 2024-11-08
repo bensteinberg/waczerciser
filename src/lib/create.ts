@@ -114,7 +114,6 @@ export async function createWARC(
 	outputFile: string,
 	asFiles: boolean,
 ): Promise<void> {
-	console.log("creating warc", inputDir, outputFile);
 	const { WARCSerializer } = await import("warcio");
 
 	// get map of all files
@@ -122,7 +121,14 @@ export async function createWARC(
 	const pathMap: Record<string, fs.Stats> = {};
 	let warcPath = null;
 	for await (const filePath of files) {
-		const stats = await fs.promises.stat(filePath);
+        let stats;
+        try {
+    		stats = await fs.promises.stat(filePath);
+        } catch (e) {
+            // in watch mode, temp files may disappear after glob runs
+            console.warn(`Failed to stat file ${filePath}`);
+            continue;
+        }
 		if (!stats.isFile()) continue;
 
 		const relativePath = path.relative(inputDir, filePath);
@@ -159,13 +165,23 @@ export async function createWARC(
 		const nodeStream = fs.createReadStream(warcPath);
 		const parser = new WARCParser(nodeStream);
 
-		for await (const record of parser) {
+		for await (let record of parser) {
 			if (record.warcType === "response" && record.warcTargetURI) {
 				const filename = uriToFilePath(record);
 				// If we have a matching file, inject its contents
 				if (filename in pathMap) {
+					delete pathMap[filename];
                     const filePath = path.join(inputDir, filename);
-					let fileContent = await fs.promises.readFile(filePath);
+
+                    // read file content
+                    let fileContent;
+                    try {
+                        fileContent = await fs.promises.readFile(filePath);
+                    } catch (e) {
+                        // in watch mode, temp files may disappear after glob runs
+                        console.warn(`Failed to read file ${filePath}`);
+                        continue;
+                    }
                     
 					// handle http headers
                     const headers = record.httpHeaders?.headers;
@@ -183,14 +199,16 @@ export async function createWARC(
 							fileContent.length.toString(),
 						);
 					}
-
-					const buffer = Buffer.from(fileContent);
-					const fakeReader = new AsyncIterReader(Readable.from(buffer));
-					record._reader = new LimitReader(
-						fakeReader,
-						fileContent.length,
-					);
-					delete pathMap[filename];
+                    
+                    record = await WARCRecord.create(
+                        {
+                            url: record.warcTargetURI,
+                            type: "response",
+                            httpHeaders: Object.fromEntries(headers || []),
+                            statusline: record.httpHeaders?.statusline,
+                        },
+                        Readable.from(fileContent),
+                    );
 				}
 			}
 			warcStream.write(
@@ -237,7 +255,16 @@ export async function createWARC(
 		const url = parts.join("/");
 
 		// Create a response record with streaming content
-		const fileStream = fs.createReadStream(filePath);
+
+        let fileStream;
+        try {
+            fileStream = fs.createReadStream(filePath);
+        } catch (e) {
+            // in watch mode, temp files may disappear after glob runs
+            console.warn(`Failed to read file ${filePath}`);
+            continue;
+        }
+
 		const contentType = mime.lookup(filePath) || 'text/html';
 		const httpHeaders: Record<string, string> = { "Content-Type": contentType };
 		if (protocol.startsWith("http")) {
@@ -285,8 +312,12 @@ export async function watchAndCreate(
 	// Watch for changes and rebuild the archive
 	watcher.on("change", async (path) => {
 		console.log(`Changes detected in ${path}, rebuilding archive...`);
-		await createArchive(inputDir, archiveFile, asFiles);
-		console.log("Archive rebuilt successfully");
+        try {
+            await createArchive(inputDir, archiveFile, asFiles);
+            console.log("Archive rebuilt successfully");
+        } catch (e) {
+            console.error(`Failed to rebuild archive: ${e}`);
+        }
 	});
 
 	return watcher;

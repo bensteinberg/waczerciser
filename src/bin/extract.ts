@@ -6,9 +6,14 @@ import { exit } from "./utils.js";
 
 export async function extractCommand(
 	inputFile: string,
-	outputDir: string,
-	options: { deleteExisting?: boolean },
+	outputDir?: string,
+	options: { deleteExisting?: boolean } = {},
 ) {
+	// Default outputDir to inputFile without extension
+	if (!outputDir) {
+		outputDir = inputFile.replace(/\.[^/.]+$/, "");
+	}
+
 	// Check if directory exists and has files
 	if (fs.existsSync(outputDir)) {
 		if (fs.lstatSync(outputDir).isFile()) {

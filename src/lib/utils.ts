@@ -33,26 +33,26 @@ export async function pathExists(path: string) {
  * @returns File path
  */
 export function uriToFilePath(record: WARCRecord) {
-    const uri = record.warcTargetURI;
+    let uri = record.warcTargetURI;
     if (!uri) {
-		throw new Error("URI is required");
+		throw new Error("WARC-Target-URI header is required");
 	}
-
-	let filename = uri.replace(/\/+/g, "/");
 
 	// make sure surt starts with the protocol (will be missing for http)
-	const protocol = new URL(uri).protocol;
-	if (!filename.startsWith(protocol)) {
-		filename = `${protocol}/${filename}`;
-	}
+	// const protocol = new URL(uri).protocol;
+	// if (!filename.startsWith(protocol)) {
+	// 	filename = `${protocol}/${filename}`;
+	// }
+	uri = uri.replace(/\/+/g, "/");
+
 
 	// if no extension, use `__index__` as filename and content type to determine the extension
-	if (filename.endsWith("/")) {
+	if (uri.endsWith("/")) {
         const contentType = record.httpHeaders?.headers.get("Content-Type") || "text/html";
         const extension = mime.extension(contentType);
-		filename += `__index__.${extension}`;
+		uri += `__index__.${extension}`;
 	}
-	return filename;
+	return uri;
 }
 
 /**

@@ -1,5 +1,4 @@
 import fs from "fs";
-import { getSurt } from "warcio/utils";
 import path from "path";
 import mime from "mime-types";
 /**
@@ -34,9 +33,7 @@ export function uriToFilePath(record) {
     if (!uri) {
         throw new Error("URI is required");
     }
-    let filename = getSurt(uri);
-    // remove extra slashes
-    filename = filename.replace(/\/+/g, "/");
+    let filename = uri.replace(/\/+/g, "/");
     // make sure surt starts with the protocol (will be missing for http)
     const protocol = new URL(uri).protocol;
     if (!filename.startsWith(protocol)) {

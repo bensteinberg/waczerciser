@@ -2,7 +2,11 @@ import fs from "fs";
 import { hasFiles } from "../lib/utils.js";
 import { extractArchive } from "../lib/extract.js";
 import { exit } from "./utils.js";
-export async function extractCommand(inputFile, outputDir, options) {
+export async function extractCommand(inputFile, outputDir, options = {}) {
+    // Default outputDir to inputFile without extension
+    if (!outputDir) {
+        outputDir = inputFile.replace(/\.[^/.]+$/, "");
+    }
     // Check if directory exists and has files
     if (fs.existsSync(outputDir)) {
         if (fs.lstatSync(outputDir).isFile()) {

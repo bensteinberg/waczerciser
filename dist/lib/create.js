@@ -1,6 +1,6 @@
 import { glob } from "fs/promises";
 import path from "path";
-import { WARCRecord, LimitReader, AsyncIterReader } from "warcio";
+import { WARCRecord } from "warcio";
 import fs from "fs";
 import { pathExists, uriToFilePath } from "./utils.js";
 import mime from "mime-types";
@@ -93,18 +93,25 @@ export async function createWACZ(inputDir, waczFile, asFiles = false) {
  * @throws Error if creation fails
  */
 export async function createWARC(inputDir, outputFile, asFiles) {
-    console.log("creating warc", inputDir, outputFile);
     const { WARCSerializer } = await import("warcio");
     // get map of all files
     const files = await glob(`${inputDir}/**/*`);
     const pathMap = {};
     let warcPath = null;
     for await (const filePath of files) {
-        const stats = await fs.promises.stat(filePath);
+        let stats;
+        try {
+            stats = await fs.promises.stat(filePath);
+        }
+        catch (e) {
+            // in watch mode, temp files may disappear after glob runs
+            console.warn(`Failed to stat file ${filePath}`);
+            continue;
+        }
         if (!stats.isFile())
             continue;
         const relativePath = path.relative(inputDir, filePath);
-        // if we have a domain, include all files
+        // if we are exporting a directory as files, include all files
         if (asFiles) {
             pathMap[relativePath] = stats;
             continue;
@@ -131,13 +138,23 @@ export async function createWARC(inputDir, outputFile, asFiles) {
         const { Readable } = await import("stream");
         const nodeStream = fs.createReadStream(warcPath);
         const parser = new WARCParser(nodeStream);
-        for await (const record of parser) {
+        for await (let record of parser) {
             if (record.warcType === "response" && record.warcTargetURI) {
                 const filename = uriToFilePath(record);
                 // If we have a matching file, inject its contents
                 if (filename in pathMap) {
+                    delete pathMap[filename];
                     const filePath = path.join(inputDir, filename);
-                    let fileContent = await fs.promises.readFile(filePath);
+                    // read file content
+                    let fileContent;
+                    try {
+                        fileContent = await fs.promises.readFile(filePath);
+                    }
+                    catch (e) {
+                        // in watch mode, temp files may disappear after glob runs
+                        console.warn(`Failed to read file ${filePath}`);
+                        continue;
+                    }
                     // handle http headers
                     const headers = record.httpHeaders?.headers;
                     if (headers) {
@@ -149,10 +166,12 @@ export async function createWARC(inputDir, outputFile, asFiles) {
                         }
                         headers.set("Content-Length", fileContent.length.toString());
                     }
-                    const buffer = Buffer.from(fileContent);
-                    const fakeReader = new AsyncIterReader(Readable.from(buffer));
-                    record._reader = new LimitReader(fakeReader, fileContent.length);
-                    delete pathMap[filename];
+                    record = await WARCRecord.create({
+                        url: record.warcTargetURI,
+                        type: "response",
+                        httpHeaders: Object.fromEntries(headers || []),
+                        statusline: record.httpHeaders?.statusline,
+                    }, Readable.from(fileContent));
                 }
             }
             warcStream.write(await WARCSerializer.serialize(record, { gzip: useGzip }));
@@ -171,19 +190,17 @@ export async function createWARC(inputDir, outputFile, asFiles) {
         }
         else {
             protocol = parts[0];
+            // skip warc file created during extraction
             if (protocol.endsWith(".warc")) {
                 continue;
             }
-            // http protocol
+            // add slashes to http and file protocols
             if (["https:", "http:"].includes(protocol)) {
+                // http protocol
                 parts[0] += "/";
-                // Remove trailing parenthesis if present
-                parts[1] = parts[1].replace(/\)$/, "");
-                // Reverse SURT domain components (e.g., "com,example" -> "example.com")
-                parts[1] = parts[1].split(",").reverse().join(".");
             }
-            // file protocol
-            else if (protocol === "file:") {
+            else {
+                // file protocol
                 parts[0] += "//";
             }
         }
@@ -193,7 +210,15 @@ export async function createWARC(inputDir, outputFile, asFiles) {
         }
         const url = parts.join("/");
         // Create a response record with streaming content
-        const fileStream = fs.createReadStream(filePath);
+        let fileStream;
+        try {
+            fileStream = fs.createReadStream(filePath);
+        }
+        catch (e) {
+            // in watch mode, temp files may disappear after glob runs
+            console.warn(`Failed to read file ${filePath}`);
+            continue;
+        }
         const contentType = mime.lookup(filePath) || 'text/html';
         const httpHeaders = { "Content-Type": contentType };
         if (protocol.startsWith("http")) {
@@ -228,8 +253,13 @@ export async function watchAndCreate(inputDir, archiveFile, asFiles = false) {
     // Watch for changes and rebuild the archive
     watcher.on("change", async (path) => {
         console.log(`Changes detected in ${path}, rebuilding archive...`);
-        await createArchive(inputDir, archiveFile, asFiles);
-        console.log("Archive rebuilt successfully");
+        try {
+            await createArchive(inputDir, archiveFile, asFiles);
+            console.log("Archive rebuilt successfully");
+        }
+        catch (e) {
+            console.error(`Failed to rebuild archive: ${e}`);
+        }
     });
     return watcher;
 }
