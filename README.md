@@ -56,7 +56,7 @@ $ tree my_dir
         └── favicon.ico
 ```
 
-Each Response record is extracted to a file based on the `warcTargetURI` field. For example, the `http://example.com` record is extracted to `http:/example.com/__index__.html`.
+Each Response record is extracted to a file based on the `warcTargetURI` field. For example, the `http://example.com` record is extracted to `http:/example.com/__index__.html`. Note that in the case of a long URI, part of the URI is hashed to create a filename of 255 characters or fewer.
 
 `extract` also writes out a metadata file, `example.warc`, which contains all non-Response records verbatim, and all Response records with their response data replaced by a file path.
 
