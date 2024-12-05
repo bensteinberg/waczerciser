@@ -26,18 +26,18 @@ test("utils.uriToFilePath", async (t) => {
 	const cases = [
 		{
 			uri: "https://example.com/path/page.html",
-			expected: "https:/com,example)/path/page.html",
+			expected: "https:/example.com/path/page.html",
 		},
 		{
 			uri: "https://example.com/path/",
-			expected: "https:/com,example)/path/__index__.html",
+			expected: "https:/example.com/path/__index__.html",
 		},
 		{ uri: "file:///path/page.html", expected: "file:/path/page.html" },
 	];
 
 	for (const { uri, expected } of cases) {
 		await t.test(`converts ${uri} to ${expected}`, () => {
-			const result = uriToFilePath(uri);
+			const result = uriToFilePath({"warcTargetURI": uri});
 			assert.equal(result, expected);
 		});
 	}
