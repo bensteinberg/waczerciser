@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import mime from "mime-types";
+import { createHash } from "crypto";
 import type { WARCRecord } from "warcio";
 
 /**
@@ -46,7 +47,17 @@ export function uriToFilePath(record: WARCRecord) {
         const contentType = record.httpHeaders?.headers.get("Content-Type") || "text/html";
         const extension = mime.extension(contentType);
 		uri += `__index__.${extension}`;
-	}
+	} else {
+                // constrain the length of the filename to 255 characters
+                const uriParts = uri.split("/");
+                const filename = uriParts[uriParts.length - 1];
+                if (filename.length > 255) {
+                        const prefix = filename.slice(0, 190)
+                        const suffix = filename.slice(190)
+                        const hash = createHash('sha256').update(suffix).digest('hex');
+                        uri = uriParts.slice(0, -1).concat([`${prefix}_${hash}`]).join("/");
+                }
+        }
     
 	return uri;
 }

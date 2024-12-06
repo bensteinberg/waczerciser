@@ -56,6 +56,37 @@ test("extract.extractArchive", async (t) => {
 		}),
 	);
 
+	await t.test(
+		"extracts WACZ file with long query string",
+		withTempDir(async (tempDir) => {
+			const inputFile = path.join(FIXTURES_DIR, "long-query-string.wacz");
+			const outputDir = path.join(tempDir, "output");
+			await extractArchive(inputFile, outputDir);
+			assert.deepEqual(await globDir(outputDir), [
+				"archive",
+				"archive/data",
+				"archive/data.warc.gz",
+				"archive/data/data.warc",
+				"archive/data/file:",
+				"archive/data/file:/dom-snapshot.html",
+				"archive/data/file:/example.com.pem",
+				"archive/data/file:/pdf-snapshot.pdf",
+				"archive/data/file:/provenance-summary.html",
+				"archive/data/file:/screenshot.png",
+				"archive/data/https:",
+				"archive/data/https:/example.com",
+				"archive/data/https:/example.com/?domain=fnord.com&page=%2Fen-fr%2Fcontact%2Fsales&referrer=https%3A%2F%2Ffnord.com%2Fen-fr%2Fenterprise&cid=dff55bc5-848a-4c2a-9191-1025e4aa6a7d&lsid=dff55bc5-848a-4c2a-9191-1025e4aa6a7d&vie_339c5db546a92e09bd1d0d278a42bdaa4d865e0b8ebf04f587d6eded3bea8c2f",
+				"archive/data/https:/example.com/favicon.ico",
+				"datapackage-digest.json",
+				"datapackage.json",
+				"indexes",
+				"indexes/index.cdx",
+				"pages",
+				"pages/pages.jsonl",
+			]);
+		}),
+	);
+
 	await t.test("throws on invalid file type", async () => {
 		await assert.rejects(extractArchive("invalid.txt", "output"), {
 			message: "Unknown file type. Supported formats: .wacz, .warc, .warc.gz",

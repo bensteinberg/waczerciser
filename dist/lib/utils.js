@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import mime from "mime-types";
+import { createHash } from "crypto";
 /**
  * Determine whether the given `path` points to a directory with files.
  *
@@ -29,23 +30,30 @@ export async function pathExists(path) {
  * @returns File path
  */
 export function uriToFilePath(record) {
-    const uri = record.warcTargetURI;
+    let uri = record.warcTargetURI;
     if (!uri) {
-        throw new Error("URI is required");
+        throw new Error("WARC-Target-URI header is required");
     }
-    let filename = uri.replace(/\/+/g, "/");
-    // make sure surt starts with the protocol (will be missing for http)
-    const protocol = new URL(uri).protocol;
-    if (!filename.startsWith(protocol)) {
-        filename = `${protocol}/${filename}`;
-    }
+    // replace multiple slashes with a single slash
+    uri = uri.replace(/\/+/g, "/");
     // if no extension, use `__index__` as filename and content type to determine the extension
-    if (filename.endsWith("/")) {
+    if (uri.endsWith("/")) {
         const contentType = record.httpHeaders?.headers.get("Content-Type") || "text/html";
         const extension = mime.extension(contentType);
-        filename += `__index__.${extension}`;
+        uri += `__index__.${extension}`;
     }
-    return filename;
+    else {
+        // constrain the length of the filename to 255 characters
+        const uriParts = uri.split("/");
+        const filename = uriParts[uriParts.length - 1];
+        if (filename.length > 255) {
+            const prefix = filename.slice(0, 190);
+            const suffix = filename.slice(190);
+            const hash = createHash('sha256').update(suffix).digest('hex');
+            uri = uriParts.slice(0, -1).concat([`${prefix}_${hash}`]).join("/");
+        }
+    }
+    return uri;
 }
 /**
  * Join paths safely, protecting against directory traversal outside of the base path
